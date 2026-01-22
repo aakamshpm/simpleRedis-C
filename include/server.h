@@ -1,4 +1,4 @@
-#ifdef SERVER_H
+#ifndef SERVER_H
 #define SERVER_H
 
 #include <stdio.h>
@@ -30,8 +30,12 @@ typedef struct {
 // Server State
 typedef struct {
     int server_fd; // listens only for new clients, it doesn't transfer any data
+    int port; // stores port number for server
     client_t clients[MAX_CLIENTS]; // array storing the state of every client
     int max_fd; // used in select(). it tells OS the highest FD we have right now, so select() knows how far it should listen
-} server_t
+} server_t;
+
+// function declarations
+server_t* server_create(int port);
 
 #endif
