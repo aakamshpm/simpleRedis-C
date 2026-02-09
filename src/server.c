@@ -10,7 +10,7 @@ server_t *server_create(int port) // socket that listens to client
     }
 
     server->port = port;
-    server->max_fd = 0; // initially there is no clients, so FD value would be 0
+    server->max_fd = 0; // initially there is no sockets(neither server nor client), so FD value would be 0
 
     // initialize all MAX_CLIENTS clients as inactive
     for (int i = 0; i < MAX_CLIENTS; i++)
@@ -18,10 +18,11 @@ server_t *server_create(int port) // socket that listens to client
         // we mark MAX_CLIENTS (eg: 1024 clients) as inactive because when memory is allocated to clients,
         // some garbage value will be remaining for that client's heap(RAM) from previous random program.
         // this may caues the server to think the client slot is already taken or even try to read from a non existent socket and crash
-        // this loop ensures empty seats for all potential clients
+        // this loop ensures empty seats for all available clients
         server->clients[i].fd = -1;
         server->clients[i].active = 0;
         server->clients[i].read_pos = 0;
+        // the above steps ensure that this particular client is inactive
     }
 
     server->server_fd = socket(AF_INET, SOCK_STREAM, 0); // create server socket
@@ -36,7 +37,7 @@ server_t *server_create(int port) // socket that listens to client
     {
         // if we crash the server and restart it immediatly, the OS usually holds the port for 60seconds (TIME_WAIT state)
         // the SO_REUSEADDR ensures OS release the port immediately so that we can restart server in an instant
-        // without SO_REUSEADDR, program will throw bind() failed: Address already in use error.
+        // without SO_REUSEADDR, program will throw 'bind() failed: Address already in use' error.
         perror("setsocketopt failed");
         exit(1);
     }
