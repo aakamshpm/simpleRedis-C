@@ -45,6 +45,7 @@ typedef struct
 } server_t;
 
 // function declarations
-server_t *server_create(int port);
+server_t *server_create(int port); // creates server socket and assign fd to it
+void server_run(server_t *server); // main event loop (this is an infinite loop that runs forever (server))
 
 #endif

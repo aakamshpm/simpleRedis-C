@@ -69,3 +69,53 @@ server_t *server_create(int port) // socket that listens to client
 
     return server;
 }
+
+void server_run(server_t *server)
+{
+    printf("Server running. Waiting for connections... \n");
+
+    while (1) // ensures this is an infinite loop where server runs forever
+    {
+        fd_set read_fds; // fd_set is data structure that holds file descriptors
+
+        FD_ZERO(&read_fds); // clears the set
+
+        // First, add server socket to the set (to detect new client connections)
+        FD_SET(server->server_fd, &read_fds);
+
+        // next, add all active client sockets to the set
+        for (int i = 0; i < MAX_CLIENTS; i++)
+        {
+            if (server->clients[i].active)
+            {
+                FD_SET(server->clients[i].fd, &read_fds);
+            }
+        }
+
+        // select() monitors all FDs in read_fds
+        // it blocks (sleeps) until at least one FD has data ready (kernel checks for data change)
+        // returns number of FDs that are ready
+        int activity = select(server->max_fd + 1, &read_fds, NULL, NULL, NULL);
+
+        if (activity < 0)
+        {
+            perror("select failed");
+            continue; // don't crash, just try again
+        }
+
+        // check if server socket has activity (if server has activity, that means a new client wants to connect)
+        if (FD_ISSET(server->server_fd, &read_fds))
+        {
+            server_accept_client(server);
+        }
+
+        // check all clients for activity (existing clients sending data)
+        for (int i = 0; i < MAX_CLIENTS; i++)
+        {
+            if (server->clients[i].active && (server->clients[i].fd, &read_fds))
+            {
+                server_read_client(server, i); // passes both server instance and client position
+            }
+        }
+    }
+}
