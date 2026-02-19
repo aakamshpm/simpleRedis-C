@@ -99,8 +99,12 @@ void server_run(server_t *server)
 
         if (activity < 0)
         {
-            perror("select failed");
-            continue; // don't crash, just try again
+            if (errno == EINTR)
+            {
+                continue; // Interrupted by signal, retry
+            }
+            perror("select() failed");
+            break;
         }
 
         // check if server socket has activity (if server has activity, that means a new client wants to connect)
@@ -118,4 +122,91 @@ void server_run(server_t *server)
             }
         }
     }
+}
+
+// set each FD to non-blocking mode
+// by default socket reading is done in blocking mode
+// server will keep on waiting for a data to arrive from client
+// in non-blocking mode, server would instantly return and listen for data from another client if no data was found in one client
+int set_nonblocking(int fd)
+{
+    int flags = fcntl(fd, F_GETFL, 0);
+    // fcntl -> File Control: it's used to modify FD
+    // fd: the File Descriptor we want to modify
+    // F_GETFL: Retreive the current settings for this socket
+    // we do this because, when we add a new setting, we don't want to loss the old ones accidently
+
+    if (flags == -1)
+    {
+        perror("fcntl F_GETFL");
+        return -1;
+    }
+
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+    // F_SETFL: used to set a new setting to FD
+    // flags | O_NONBLOCK : we combine the current settings of that FD with Non Blocking Mode
+    // Old Settings + Non-Blocking mode
+    {
+        perror("fcntl F_SETFL O_NONBLOCK");
+        return -1;
+    }
+
+    return 0;
+}
+
+// accept a new client connection
+void server_accept_client(server_t *server)
+{
+    struct sockaddr_in client_addr; // a blank clipboard which we will use to store incoming client details
+    // client_addr is a chunk of memory big enough to store an IPv4 address and a port number.
+    // initially it will be filled with garbage values
+
+    socklen_t addr_len = sizeof(client_addr); // the size of blank clipboard. we note down this to ensure we don't write outside the specified memory region
+
+    int client_fd = accept(server->server_fd, (struct sockaddr *)&client_addr, &addr_len);
+    // incoming client data will be stored on client_addr
+    // after accept() is done, the addr_len will be updated with written data size in bytes
+
+    if (client_fd < 0)
+    {
+        if (errno != EWOULDBLOCK && errno != EAGAIN) // we log all client failure's except EWOULDBLOCK and EAGAIN
+        {
+            perror("accept() failed");
+        }
+        return;
+        // sometimes the client sends request before server spins up, hence the request maybe lost due to time out.
+        // such scenarios are often and this would be considered as an EWOULDBLOCK and EAGAIN errors.
+        // we don't need to spam connection failure logs for this scenario, hence we ignore them and return
+    }
+
+    int slot = -1;
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (!server->clients[i].active)
+        {
+            slot = i;
+            break;
+            // we iterate through the clients and find an inactive field for new client
+        }
+    }
+
+    if (slot == -1)
+    {
+        printf("Max clients reached, rejecting connection\n");
+        close(client_fd);
+        return;
+    }
+
+    set_nonblocking(client_fd); // set the client as non-blocking
+
+    // initialize client
+    server->clients[slot].fd = client_fd;                      // assign FD
+    server->clients[slot].active = 1;                          // mark the seat as active
+    server->clients[slot].read_pos = 0;                        // start reading from top
+    memset(server->clients[slot].read_buffer, 0, BUFFER_SIZE); // wipe the memory buffer clean with zeros, so that previous data left by old client doesn't get mixed up with new
+
+    printf("Client connected: %s:%d (fd=%d, slot=%d)\n",
+           inet_ntoa(client_addr.sin_addr), // converts binary IP address to text
+           ntohs(client_addr.sin_port),     // converts network byte order to default port number
+           client_fd, slot);
 }

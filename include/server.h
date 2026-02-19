@@ -45,7 +45,12 @@ typedef struct
 } server_t;
 
 // function declarations
-server_t *server_create(int port); // creates server socket and assign fd to it
-void server_run(server_t *server); // main event loop (this is an infinite loop that runs forever (server))
+server_t *server_create(int port);                           // creates server socket and assign fd to it
+void server_run(server_t *server);                           // main event loop (this is an infinite loop that runs forever (server))
+void server_accept_client(server_t *server);                 // used to accept client connections using server socket
+void server_handle_client(server_t *server, int client_idx); // read data from a certain active client
+void server_close_client(server_t *server, int client_idx);  // close a client connection
+void server_shutdown(server_t *server);
+int set_nonblocking(int fd);
 
 #endif
